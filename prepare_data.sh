@@ -6,7 +6,7 @@ echo "Install git if is not installed"
 sudo apt update
 sudo apt install git
 
-ROOT_DIR="/home/admin/osrm"
+ROOT_DIR="/home/${USER}/osrm"
 
 if [ -d "$ROOT_DIR" ]; then
   # Take action if $ROOT_DIR exists. #
@@ -20,9 +20,9 @@ mkdir osrm
 cd osrm
 
 echo "================================================================================================================================"
-echo "Cloning osrm-backend"
+echo "Cloning distance_calc_server.git"
 
-git clone -b v5.26.0 https://github.com/Project-OSRM/osrm-backend.git 
+git clone https://github.com/mediqonadmin/distance_calc_server.git 
 
 echo "================================================================================================================================"
 echo "Download and extract osrm binaries"
@@ -32,16 +32,14 @@ wget https://github.com/Project-OSRM/osrm-backend/releases/download/v5.26.0/node
 tar xvzf node_osrm-v5.26.0-node-v64-linux-x64-Release.tar.gz
 
 echo "================================================================================================================================"
-echo "Copy profiles from osrm-backend  and libstdc++.so.6 to binding"
+echo "Copy distance_calc_server to binding"
 
-cp -r  osrm-backend/profiles/ binding/
-
-cp /usr/lib/x86_64-linux-gnu/libstdc++.so.6 binding/
+cp  -r "$ROOT_DIR"/distance_calc_server/* binding/
 
 echo "================================================================================================================================"
 echo "Removing osrm-backend and binaries tar.gz package"
 
-rm -rf osrm-backend/
+rm -rf distance_calc_server/
 
 rm  node_osrm-v5.26.0-node-v64-linux-x64-Release.tar.gz
 
