@@ -3,54 +3,17 @@
 echo "================================================================================================================================"
 echo "Install git if is not installed"
 
-sudo apt update
-sudo apt install git
-
 ROOT_DIR="/home/${USER}/osrm"
 
 if [ -d "$ROOT_DIR" ]; then
-  # Take action if $ROOT_DIR exists. #
-  rm -rf "$ROOT_DIR"
-  echo "Deleting ${ROOT_DIR}..."
+  echo "Folder ${ROOT_DIR} does exists"
 else
   echo "Folder ${ROOT_DIR} does not exists"
+  Exit code 1
 fi
 
-mkdir osrm
 cd osrm
 
-echo "================================================================================================================================"
-echo "Cloning distance_calc_server.git"
-
-git clone https://github.com/mediqonadmin/distance_calc_server.git 
-
-echo "================================================================================================================================"
-echo "Download and extract osrm binaries"
-
-wget https://github.com/Project-OSRM/osrm-backend/releases/download/v5.26.0/node_osrm-v5.26.0-node-v64-linux-x64-Release.tar.gz
-
-tar xvzf node_osrm-v5.26.0-node-v64-linux-x64-Release.tar.gz
-
-echo "================================================================================================================================"
-echo "Copy distance_calc_server to binding"
-
-cp  -r "$ROOT_DIR"/distance_calc_server/* binding/
-
-echo "================================================================================================================================"
-echo "Removing osrm-backend and binaries tar.gz package"
-
-rm -rf distance_calc_server/
-
-rm  node_osrm-v5.26.0-node-v64-linux-x64-Release.tar.gz
-
-echo "================================================================================================================================"
-echo "Downloading osmconvert64"
-
-cd binding
-
-wget https://github.com/ITSLeeds/OSMtools/raw/master/inst/osmconvert64
-
-sudo chmod 777 osmconvert64
 
 echo "================================================================================================================================"
 echo "Downloading geo files ..."
