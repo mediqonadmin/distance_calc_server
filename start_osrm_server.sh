@@ -26,7 +26,7 @@ else
   Exit code 1
 fi
 
-DATA_PATH="${OSRM_ROOT_DIR}/all_data/germany_eu.osm.pbf"
+DATA_PATH="${OSRM_ROOT_DIR}/all_data/germany_eu.osrm"
 
 if [ -d "$DATA_PATH" ]; then
   
@@ -38,5 +38,5 @@ else
 fi
 
 
-./"$OSRM_ROUTED_PATH" "$DATA_PATH" -p 5000
+"$OSRM_ROUTED_PATH" "$DATA_PATH" -p 5000
 
