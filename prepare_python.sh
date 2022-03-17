@@ -25,12 +25,12 @@ wget https://www.python.org/ftp/python/3.7.9/Python-3.7.9.tar.xz
 echo "================================================================================================================================"
 echo "Extracting python ..."
 
-tar -xf Python-3.7.3.tar.xz
+tar -xf Python-3.7.9.tar.xz
 
 echo "================================================================================================================================"
 echo "Installing python ..."
 
-cd Python-3.7.3
+cd Python-3.7.9
 ./configure --enable-optimizations
 
 make -j 8
