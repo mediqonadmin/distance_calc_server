@@ -4,7 +4,7 @@
 echo "================================================================================================================================"
 echo "Install git if is not installed"
 
-ROOT_DIR="/home/${USER}/osrm"
+ROOT_DIR="/home/${USER}/osrm/binding"
 
 if [ -d "$ROOT_DIR" ]; then
   echo "Folder ${ROOT_DIR} does exists"
@@ -13,7 +13,7 @@ else
   Exit code 1
 fi
 
-cd osrm
+cd "$ROOT_DIR"
 
 
 echo "================================================================================================================================"
