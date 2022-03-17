@@ -65,7 +65,8 @@ echo "Downloading geo files is done."
 echo "================================================================================================================================"
 echo "Converting geo files .."
 
-cd ..
+cd "$ROOT_DIR"
+
 mkdir converted_data
 
 ./osmconvert64  ./pre_data/alsace-latest.osm.pbf -o=./converted_data/alsace.o5m
