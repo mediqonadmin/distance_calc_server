@@ -35,7 +35,7 @@ cd Python-3.7.9
 
 make -j 8
 
-sudo make altinstall
+sudo make alt install
 
 python3.7 --version
 
