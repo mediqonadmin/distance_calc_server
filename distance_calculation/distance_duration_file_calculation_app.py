@@ -32,29 +32,25 @@ class DistanceDurationCalculationFileApp:
         if not os.path.exists(self.coordination_file_path):
             raise Exception(f"The coordination file '{self.coordination_file_path}' does not exists!")
 
-        proceed_data_list = self._extract_proceed_data_list()
+        coordination_list = self._get_coordination_list()
 
-        coordination_list = self._get_coordination_list(self.coordination_file_path)
+        self._calculate_distance_duration(coordination_list)
 
-        self._calculate_distance_duration(coordination_list, proceed_data_list)
+    def _get_coordination_list(self) -> [List[Dict]]:
 
-    def _extract_proceed_data_list(self):
-        proceed_data_list = []
-        logger.debug(f"Extract proceed data list from '{self.result_file_path}' ...")
+        all_df = pd.read_csv(self.coordination_file_path, dtype=CoordinationFileDbTypes, sep=";")
         if os.path.exists(self.result_file_path):
-            pd_df = pd.read_csv(self.result_file_path, dtype=DistanceDurationDbTypes, sep=";")
-            proceed_data_list = pd_df.to_dict(orient='records')
-        return proceed_data_list
+            proceed_df = pd.read_csv(self.result_file_path, dtype=DistanceDurationDbTypes, sep=";")
+            dfe = pd.merge(all_df, proceed_df, how='left', on=['key1', 'key2'], indicator=True)
+            all_df = dfe[dfe["_merge"] == "left_only"]
 
-    @staticmethod
-    def _get_coordination_list(coordination_file_path: str) -> [List[Dict]]:
+            logger.debug(f"In '{self.coordination_file_path}' {len(proceed_df.index)} are proceed. It remains {len(all_df.index)} to calculate.")
 
-        pd_df = pd.read_csv(coordination_file_path, dtype=CoordinationFileDbTypes, sep=";")
-        pd_data_list = pd_df.to_dict(orient='records')
+        pd_data_list = all_df.to_dict(orient='records')
 
         return pd_data_list
 
-    def _calculate_distance_duration(self, coordination_list: List[Dict], proceed_data_list):
+    def _calculate_distance_duration(self, coordination_list: List[Dict]):
 
         total_items = len(coordination_list)
         logger.debug(f"Retrieve {total_items} distances from the coordination list ...")
@@ -72,17 +68,6 @@ class DistanceDurationCalculationFileApp:
             # logger.debug(f"Processing the kh_key '{kh_key_item['kh_key']}'")
             key1 = coord_item[CoordinationRequestSchema.key1]
             key2 = coord_item[CoordinationRequestSchema.key2]
-
-            proceed_res = [p for p in proceed_data_list if
-                           (p[CoordinationRequestSchema.key1] == key1)
-                           and (p[CoordinationRequestSchema.key2] == key2)]
-            if len(proceed_res) > 0:
-                pd_data[CoordinationRequestSchema.key1].append(key1)
-                pd_data[CoordinationRequestSchema.key2].append(key2)
-                pd_data[DistanceDurationSchema.distance].append(proceed_res[0][DistanceDurationSchema.distance])
-                pd_data[DistanceDurationSchema.duration].append(proceed_res[0][DistanceDurationSchema.duration])
-
-                continue
 
             distance, duration = self._get_driving_distance(self.osrm_server_base_url,
                                                             coord_item[CoordinationRequestSchema.longitude1],
@@ -160,9 +145,9 @@ class DistanceDurationCalculationFileApp:
 
 
 if __name__ == '__main__':
-    coordination_file_path = None #"/mnt/daten/distance_place_temp/coordination_items_0000000000.csv"
-    archive_file_path = None #"/mnt/daten/distance_place_temp/archive/coordination_items_0000000000.csv"
-    result_file_path = None #"/mnt/daten/distance_place_temp/result/results_items_0000000000.csv"
+    coordination_file_path = "/mnt/daten/distance_place_temp/coordination_items_0000000028.csv"
+    archive_file_path = "/mnt/daten/distance_place_temp/archive/coordination_items_0000000028.csv"
+    result_file_path = "/mnt/daten/distance_place_temp/result/results_items_0000000028.csv"
     osrm_server_base_url = "http://localhost:5000"
     for arg in sys.argv:
         if arg.lower().startswith("coord_file="):
