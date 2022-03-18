@@ -38,5 +38,5 @@ else
 fi
 
 
-"$OSRM_ROUTED_PATH" "$DATA_PATH" -p 5000
+"$OSRM_ROUTED_PATH" "$DATA_PATH" -t 10 -p 5000
 

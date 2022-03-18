@@ -113,7 +113,7 @@ class DistanceDurationCalculationFileApp:
                 os.remove(self.result_file_path)
 
             pd_df = pd.DataFrame.from_dict(pd_data)
-            pd_df.to_csv(self.result_file_path, index=False)
+            pd_df.to_csv(self.result_file_path, index=False, sep=";")
 
         logger.debug(f"Retrieve {total_items} distances from the coordination list is done. {(time.time() - start_time)}")
 
