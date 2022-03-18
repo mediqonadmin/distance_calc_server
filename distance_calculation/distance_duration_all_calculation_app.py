@@ -17,12 +17,14 @@ class DistanceDurationCalculationAllApp:
     not_proceed_coordination_files_list = []
     proceed_coordination_files_list = []
 
-    process_coord_file_script_path = "/home/MEDIQON/hamidreza.seifi/PycharmProjects/etl/de/mediqon/apps/geografie/distance_calculation/distance_duration_file_calculation_app.py"
+    process_coord_file_script_path = ""
 
     def __init__(self, coordination_root_path: str, result_root_path: str, osrm_server_base_url: str):
         self.coordination_root_path = coordination_root_path
         self.result_root_path = result_root_path
         self.osrm_server_base_url = osrm_server_base_url
+
+        self.process_coord_file_script_path = os.path.join(os.path.dirname(__file__), "distance_duration_file_calculation_app.py")
 
     def start(self):
         logger.info(f"Calculating Distance and Duration for coordination files in '{self.coordination_root_path}'")

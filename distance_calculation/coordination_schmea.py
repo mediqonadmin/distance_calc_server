@@ -1,38 +1,34 @@
-from sparkql import Struct, Decimal, Integer, Float
 
-from de.mediqon.utils.sparkql_utils.fields import Varchar
-
-
-class CoordinationRequestSchema(Struct):
-    key1 = Varchar(nullable=False, length=200)
-    longitude1 = Float(nullable=False)
-    latitude1 = Float(nullable=False)
-    key2 = Varchar(nullable=False, length=200)
-    longitude2 = Float(nullable=False)
-    latitude2 = Float(nullable=False)
+class CoordinationRequestSchema:
+    key1 = "key1"
+    longitude1 = "longitude1"
+    latitude1 = "latitude1"
+    key2 = "key2"
+    longitude2 = "longitude2"
+    latitude2 = "latitude2"
 
 
-class CoordinationItemSchema(Struct):
-    key = Varchar(nullable=False, length=200)
-    longitude = Float(nullable=False)
-    latitude = Float(nullable=False)
+class CoordinationItemSchema:
+    key = "key"
+    longitude = "longitude"
+    latitude = "latitude"
 
 
-class DistanceDurationSchema(Struct):
-    key1 = Varchar(nullable=False, length=200)
-    key2 = Varchar(nullable=False, length=200)
-    duration = Float(nullable=False)
-    distance = Float(nullable=False)
+class DistanceDurationSchema:
+    key1 = "key1"
+    key2 = "key2"
+    duration = "duration"
+    distance = "distance"
 
 
-CoordinationFileDbTypes = {CoordinationRequestSchema.key1.NAME: 'str',
-                           CoordinationRequestSchema.key2.NAME: 'str',
-                           CoordinationRequestSchema.longitude1.NAME: 'float',
-                           CoordinationRequestSchema.latitude1.NAME: 'float',
-                           CoordinationRequestSchema.longitude2.NAME: 'float',
-                           CoordinationRequestSchema.latitude2.NAME: 'float'}
+CoordinationFileDbTypes = {CoordinationRequestSchema.key1: 'str',
+                           CoordinationRequestSchema.key2: 'str',
+                           CoordinationRequestSchema.longitude1: 'float',
+                           CoordinationRequestSchema.latitude1: 'float',
+                           CoordinationRequestSchema.longitude2: 'float',
+                           CoordinationRequestSchema.latitude2: 'float'}
 
-DistanceDurationDbTypes = {DistanceDurationSchema.key1.NAME: 'str',
-                           DistanceDurationSchema.key2.NAME: 'str',
-                           DistanceDurationSchema.duration.NAME: 'float',
-                           DistanceDurationSchema.distance.NAME: 'float'}
+DistanceDurationDbTypes = {DistanceDurationSchema.key1: 'str',
+                           DistanceDurationSchema.key2: 'str',
+                           DistanceDurationSchema.duration: 'float',
+                           DistanceDurationSchema.distance: 'float'}

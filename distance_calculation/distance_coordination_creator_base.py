@@ -21,9 +21,9 @@ class DistanceCoordinationCreatorBase:
                                  longitude: float,
                                  latitude: float) -> Dict:
         item = {
-            CoordinationItemSchema.key.NAME: key,
-            CoordinationItemSchema.longitude.NAME: longitude,
-            CoordinationItemSchema.latitude.NAME: latitude
+            CoordinationItemSchema.key: key,
+            CoordinationItemSchema.longitude: longitude,
+            CoordinationItemSchema.latitude: latitude
         }
 
         return item
@@ -45,38 +45,38 @@ class DistanceCoordinationCreatorBase:
                     os.unlink(old_file)
 
         proceed_items = {
-            CoordinationRequestSchema.key1.NAME: [],
-            CoordinationRequestSchema.longitude1.NAME: [],
-            CoordinationRequestSchema.latitude1.NAME: [],
-            CoordinationRequestSchema.key2.NAME: [],
-            CoordinationRequestSchema.longitude2.NAME: [],
-            CoordinationRequestSchema.latitude2.NAME: []
+            CoordinationRequestSchema.key1: [],
+            CoordinationRequestSchema.longitude1: [],
+            CoordinationRequestSchema.latitude1: [],
+            CoordinationRequestSchema.key2: [],
+            CoordinationRequestSchema.longitude2: [],
+            CoordinationRequestSchema.latitude2: []
         }
 
         saving_index = 0
 
         for point_item_1 in point_list_1:
             # logger.debug(f"Processing the kh_key '{kh_key_item['kh_key']}'")
-            key_item_1 = point_item_1[CoordinationItemSchema.key.NAME]
-            longitude_item_1 = point_item_1[CoordinationItemSchema.longitude.NAME]
-            latitude_1 = point_item_1[CoordinationItemSchema.latitude.NAME]
+            key_item_1 = point_item_1[CoordinationItemSchema.key]
+            longitude_item_1 = point_item_1[CoordinationItemSchema.longitude]
+            latitude_1 = point_item_1[CoordinationItemSchema.latitude]
 
             t = 0
             # logger.debug(f"Processing kh_key: '{kh_key_item['kh_key']}' ...")
             for point_item_2 in point_list_2:
                 # logger.debug(f"Processing the plz '{plz_item['plz']}'")
-                key_item_2 = point_item_2[CoordinationItemSchema.key.NAME]
-                longitude_item_2 = point_item_2[CoordinationItemSchema.longitude.NAME]
-                latitude_2 = point_item_2[CoordinationItemSchema.latitude.NAME]
+                key_item_2 = point_item_2[CoordinationItemSchema.key]
+                longitude_item_2 = point_item_2[CoordinationItemSchema.longitude]
+                latitude_2 = point_item_2[CoordinationItemSchema.latitude]
 
-                proceed_items[CoordinationRequestSchema.key1.NAME].append(key_item_1)
-                proceed_items[CoordinationRequestSchema.longitude1.NAME].append(longitude_item_1)
-                proceed_items[CoordinationRequestSchema.latitude1.NAME].append(latitude_1)
-                proceed_items[CoordinationRequestSchema.key2.NAME].append(key_item_2)
-                proceed_items[CoordinationRequestSchema.longitude2.NAME].append(longitude_item_2)
-                proceed_items[CoordinationRequestSchema.latitude2.NAME].append(latitude_2)
+                proceed_items[CoordinationRequestSchema.key1].append(key_item_1)
+                proceed_items[CoordinationRequestSchema.longitude1].append(longitude_item_1)
+                proceed_items[CoordinationRequestSchema.latitude1].append(latitude_1)
+                proceed_items[CoordinationRequestSchema.key2].append(key_item_2)
+                proceed_items[CoordinationRequestSchema.longitude2].append(longitude_item_2)
+                proceed_items[CoordinationRequestSchema.latitude2].append(latitude_2)
 
-                if len(proceed_items[CoordinationRequestSchema.key1.NAME]) >= self.read_data_chunk_size:
+                if len(proceed_items[CoordinationRequestSchema.key1]) >= self.read_data_chunk_size:
                     self._save_proceed_items(saving_items=proceed_items,
                                              index=saving_index,
                                              total_items=total_items,
@@ -84,12 +84,12 @@ class DistanceCoordinationCreatorBase:
                     saving_index += 1
 
                     proceed_items = {
-                        CoordinationRequestSchema.key1.NAME: [],
-                        CoordinationRequestSchema.longitude1.NAME: [],
-                        CoordinationRequestSchema.latitude1.NAME: [],
-                        CoordinationRequestSchema.key2.NAME: [],
-                        CoordinationRequestSchema.longitude2.NAME: [],
-                        CoordinationRequestSchema.latitude2.NAME: []
+                        CoordinationRequestSchema.key1: [],
+                        CoordinationRequestSchema.longitude1: [],
+                        CoordinationRequestSchema.latitude1: [],
+                        CoordinationRequestSchema.key2: [],
+                        CoordinationRequestSchema.longitude2: [],
+                        CoordinationRequestSchema.latitude2: []
                     }
 
                     # t += 1
@@ -97,7 +97,7 @@ class DistanceCoordinationCreatorBase:
                     #    break
 
             # time.sleep(5)
-        if len(proceed_items[CoordinationRequestSchema.key1.NAME]) > 0:
+        if len(proceed_items[CoordinationRequestSchema.key1]) > 0:
             self._save_proceed_items(saving_items=proceed_items,
                                      index=saving_index,
                                      total_items=total_items,
@@ -109,7 +109,7 @@ class DistanceCoordinationCreatorBase:
         file_path = self._get_new_temp_file_path(index)
 
         wrote_size = self.read_data_chunk_size * index
-        logger.debug(f"Writing {len(saving_items[CoordinationRequestSchema.key1.NAME]) + wrote_size} from {total_items} items in: '{file_path}'")
+        logger.debug(f"Writing {len(saving_items[CoordinationRequestSchema.key1]) + wrote_size} from {total_items} items in: '{file_path}'")
 
         if os.path.exists(file_path):
             if (if_exists.lower() == "delete") or (if_exists.lower() == "overwrite"):

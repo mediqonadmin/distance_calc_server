@@ -57,42 +57,42 @@ class DistanceDurationCalculationFileApp:
         last_proceed_count = 0
 
         pd_data = {
-            CoordinationRequestSchema.key1.NAME: [],
-            CoordinationRequestSchema.key2.NAME: [],
-            DistanceDurationSchema.distance.NAME: [],
-            DistanceDurationSchema.duration.NAME: []
+            CoordinationRequestSchema.key1: [],
+            CoordinationRequestSchema.key2: [],
+            DistanceDurationSchema.distance: [],
+            DistanceDurationSchema.duration: []
         }
 
         for coord_item in coordination_list:
             # logger.debug(f"Processing the kh_key '{kh_key_item['kh_key']}'")
-            key1 = coord_item[CoordinationRequestSchema.key1.NAME]
-            key2 = coord_item[CoordinationRequestSchema.key2.NAME]
+            key1 = coord_item[CoordinationRequestSchema.key1]
+            key2 = coord_item[CoordinationRequestSchema.key2]
 
             proceed_res = [p for p in proceed_data_list if
-                           (p[CoordinationRequestSchema.key1.NAME] == key1)
-                           and (p[CoordinationRequestSchema.key2.NAME] == key2)]
+                           (p[CoordinationRequestSchema.key1] == key1)
+                           and (p[CoordinationRequestSchema.key2] == key2)]
             if len(proceed_res) > 0:
-                pd_data[CoordinationRequestSchema.key1.NAME].append(key1)
-                pd_data[CoordinationRequestSchema.key2.NAME].append(key2)
-                pd_data[DistanceDurationSchema.distance.NAME].append(proceed_res[0][DistanceDurationSchema.distance.NAME])
-                pd_data[DistanceDurationSchema.duration.NAME].append(proceed_res[0][DistanceDurationSchema.duration.NAME])
+                pd_data[CoordinationRequestSchema.key1].append(key1)
+                pd_data[CoordinationRequestSchema.key2].append(key2)
+                pd_data[DistanceDurationSchema.distance].append(proceed_res[0][DistanceDurationSchema.distance])
+                pd_data[DistanceDurationSchema.duration].append(proceed_res[0][DistanceDurationSchema.duration])
 
                 continue
 
             distance, duration = self._get_driving_distance(self.osrm_server_base_url,
-                                                            coord_item[CoordinationRequestSchema.longitude1.NAME],
-                                                            coord_item[CoordinationRequestSchema.latitude1.NAME],
-                                                            coord_item[CoordinationRequestSchema.longitude2.NAME],
-                                                            coord_item[CoordinationRequestSchema.latitude2.NAME])
-            pd_data[CoordinationRequestSchema.key1.NAME].append(key1)
-            pd_data[CoordinationRequestSchema.key2.NAME].append(key2)
-            pd_data[DistanceDurationSchema.distance.NAME].append(distance)
-            pd_data[DistanceDurationSchema.duration.NAME].append(duration)
+                                                            coord_item[CoordinationRequestSchema.longitude1],
+                                                            coord_item[CoordinationRequestSchema.latitude1],
+                                                            coord_item[CoordinationRequestSchema.longitude2],
+                                                            coord_item[CoordinationRequestSchema.latitude2])
+            pd_data[CoordinationRequestSchema.key1].append(key1)
+            pd_data[CoordinationRequestSchema.key2].append(key2)
+            pd_data[DistanceDurationSchema.distance].append(distance)
+            pd_data[DistanceDurationSchema.duration].append(duration)
 
             last_proceed_count += 1
 
             if last_proceed_count >= self.writing_chunk:
-                logger.debug(f"Write {len(pd_data[CoordinationRequestSchema.key1.NAME])} from {total_items} in '{self.result_file_path}' ...")
+                logger.debug(f"Write {len(pd_data[CoordinationRequestSchema.key1])} from {total_items} in '{self.result_file_path}' ...")
 
                 if os.path.exists(self.result_file_path):
                     os.remove(self.result_file_path)
