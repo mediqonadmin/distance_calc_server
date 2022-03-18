@@ -71,7 +71,7 @@ class DistanceDurationCalculationAllApp:
                     logger.info(f"End of processing {running_item['source']} with {running_item['status']}")
 
         succeed_items = [i for i in self.proceed_coordination_files_list if i["status"] == "done"]
-        failed_items = [i for i in self.proceed_coordination_files_list if i["status"] == "done"]
+        failed_items = [i for i in self.proceed_coordination_files_list if i["status"] == "error"]
 
         logger.info(f"All process are finished")
         logger.info(f"{len(succeed_items)} process are succeeded")
