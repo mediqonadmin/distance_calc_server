@@ -19,9 +19,13 @@ class DistanceDurationCalculationAllApp:
 
     process_coord_file_script_path = ""
 
-    def __init__(self, in_coordination_root_path: str, in_result_root_path: str, in_osrm_server_base_url: str):
+    def __init__(self, in_coordination_root_path: str,
+                 in_result_root_path: str,
+                 in_archive_root_path: str,
+                 in_osrm_server_base_url: str):
         self.coordination_root_path = in_coordination_root_path
         self.result_root_path = in_result_root_path
+        self.archive_root_path = in_archive_root_path
         self.osrm_server_base_url = in_osrm_server_base_url
 
         self.process_coord_file_script_path = os.path.join(os.path.dirname(__file__), "distance_duration_file_calculation_app.py")
@@ -31,6 +35,9 @@ class DistanceDurationCalculationAllApp:
 
         if not os.path.exists(self.coordination_root_path):
             raise Exception(f"The coordination files folder '{self.coordination_root_path}' does not exists!")
+
+        if not os.path.exists(self.archive_root_path):
+            os.mkdir(self.archive_root_path)
 
         self.not_proceed_coordination_files_list = self._extract_coordination_files_list()
 
@@ -49,6 +56,7 @@ class DistanceDurationCalculationAllApp:
                     running_arguments = ["python3",
                                          self.process_coord_file_script_path,
                                          f"coord_file={coord_item['source']}",
+                                         f"archive_file={coord_item['archive']}",
                                          f"result_file={coord_item['result']}",
                                          f"osrm_url={self.osrm_server_base_url}"]
 
@@ -86,6 +94,7 @@ class DistanceDurationCalculationAllApp:
 
         files_list = [{"source": os.path.join(self.coordination_root_path, f),
                        "result": self._extract_result_file_name(f),
+                       "archive": self._extract_archive_file_name(f),
                        "status": False,
                        "proc": False} for f in files_list]
 
@@ -97,14 +106,23 @@ class DistanceDurationCalculationAllApp:
                                                                                                                  "")
         return os.path.join(self.result_root_path, f"results_items_{file_index}.csv")
 
+    def _extract_archive_file_name(self, source_file_name) -> str:
+
+        file_name = os.path.basename(source_file_name)
+
+        return os.path.join(self.archive_root_path, file_name)
+
 
 if __name__ == '__main__':
     coordination_root_path = None #"/mnt/daten/distance_place_temp"
     result_root_path = None #"/mnt/daten/distance_place_temp/result"
+    archive_root_path = None #"/mnt/daten/distance_place_temp/archive"
     osrm_server_base_url = None #"http://localhost:5000"
     for arg in sys.argv:
         if arg.lower().startswith("coord_folder="):
             coordination_root_path = arg.lower().replace("coord_folder=", "").strip()
+        if arg.lower().startswith("archive_folder="):
+            archive_root_path = arg.lower().replace("archive_folder=", "").strip()
         if arg.lower().startswith("result_folder="):
             result_root_path = arg.lower().replace("result_folder=", "").strip()
         if arg.lower().startswith("osrm_url="):
@@ -112,6 +130,8 @@ if __name__ == '__main__':
 
     if coordination_root_path is None:
         raise Exception(f"coord_file argument is not set!")
+    if archive_root_path is None:
+        raise Exception(f"archive_folder argument is not set!")
     if result_root_path is None:
         raise Exception(f"result_file argument is not set!")
     if osrm_server_base_url is None:
@@ -119,4 +139,5 @@ if __name__ == '__main__':
 
     DistanceDurationCalculationAllApp(in_coordination_root_path=coordination_root_path,
                                       in_result_root_path=result_root_path,
+                                      in_archive_root_path=archive_root_path,
                                       in_osrm_server_base_url=osrm_server_base_url).start()

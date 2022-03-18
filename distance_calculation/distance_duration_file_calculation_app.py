@@ -1,5 +1,6 @@
 import json
 import os
+import shutil
 import sys
 from typing import Dict, List
 
@@ -16,9 +17,13 @@ from coordination_schmea import CoordinationRequestSchema, DistanceDurationSchem
 class DistanceDurationCalculationFileApp:
     writing_chunk = 2000
 
-    def __init__(self, in_coordination_file_path: str, in_result_file_path: str, in_osrm_server_base_url: str):
+    def __init__(self, in_coordination_file_path: str,
+                 in_result_file_path: str,
+                 in_archive_file_path: str,
+                 in_osrm_server_base_url: str):
         self.coordination_file_path = in_coordination_file_path
         self.result_file_path = in_result_file_path
+        self.archive_file_path = in_archive_file_path
         self.osrm_server_base_url = in_osrm_server_base_url
 
     def start(self):
@@ -106,7 +111,9 @@ class DistanceDurationCalculationFileApp:
 
                 last_proceed_count = 0
 
-        logger.debug(f"End of loop!")
+        logger.debug(f"End of Retrieve {total_items} distances from the coordination list.")
+        shutil.move(self.coordination_file_path, self.archive_file_path)
+        logger.debug(f"File '{self.coordination_file_path}' moved to archive: '{self.archive_file_path}'")
 
         if last_proceed_count > 0:
             if os.path.exists(self.result_file_path):
@@ -154,11 +161,14 @@ class DistanceDurationCalculationFileApp:
 
 if __name__ == '__main__':
     coordination_file_path = None #"/mnt/daten/distance_place_temp/coordination_items_0000000000.csv"
+    archive_file_path = None #"/mnt/daten/distance_place_temp/archive/coordination_items_0000000000.csv"
     result_file_path = None #"/mnt/daten/distance_place_temp/result/results_items_0000000000.csv"
     osrm_server_base_url = "http://localhost:5000"
     for arg in sys.argv:
         if arg.lower().startswith("coord_file="):
             coordination_file_path = arg.lower().replace("coord_file=", "").strip()
+        if arg.lower().startswith("archive_file="):
+            archive_file_path = arg.lower().replace("archive_file=", "").strip()
         if arg.lower().startswith("result_file="):
             result_file_path = arg.lower().replace("result_file=", "").strip()
         if arg.lower().startswith("osrm_url="):
@@ -168,9 +178,12 @@ if __name__ == '__main__':
         raise Exception(f"coord_file argument is not set!")
     if result_file_path is None:
         raise Exception(f"result_file argument is not set!")
+    if archive_file_path is None:
+        raise Exception(f"result_file argument is not set!")
     if osrm_server_base_url is None:
         raise Exception(f"Invalid osrm_url!")
 
     DistanceDurationCalculationFileApp(in_coordination_file_path=coordination_file_path,
                                        in_result_file_path=result_file_path,
+                                       in_archive_file_path=archive_file_path,
                                        in_osrm_server_base_url=osrm_server_base_url).start()
