@@ -19,10 +19,10 @@ class DistanceDurationCalculationAllApp:
 
     process_coord_file_script_path = ""
 
-    def __init__(self, coordination_root_path: str, result_root_path: str, osrm_server_base_url: str):
-        self.coordination_root_path = coordination_root_path
-        self.result_root_path = result_root_path
-        self.osrm_server_base_url = osrm_server_base_url
+    def __init__(self, in_coordination_root_path: str, in_result_root_path: str, in_osrm_server_base_url: str):
+        self.coordination_root_path = in_coordination_root_path
+        self.result_root_path = in_result_root_path
+        self.osrm_server_base_url = in_osrm_server_base_url
 
         self.process_coord_file_script_path = os.path.join(os.path.dirname(__file__), "distance_duration_file_calculation_app.py")
 
@@ -46,7 +46,7 @@ class DistanceDurationCalculationAllApp:
                     coord_item = self.not_proceed_coordination_files_list[0]
                     self.not_proceed_coordination_files_list.remove(coord_item)
 
-                    running_arguments = ["python",
+                    running_arguments = ["python3",
                                          self.process_coord_file_script_path,
                                          f"coord_file={coord_item['source']}",
                                          f"result_file={coord_item['result']}",
@@ -99,9 +99,9 @@ class DistanceDurationCalculationAllApp:
 
 
 if __name__ == '__main__':
-    coordination_root_path = "/mnt/daten/distance_place_temp"
-    result_root_path = "/mnt/daten/distance_place_temp/result"
-    osrm_server_base_url = "http://localhost:5000"
+    coordination_root_path = None #"/mnt/daten/distance_place_temp"
+    result_root_path = None #"/mnt/daten/distance_place_temp/result"
+    osrm_server_base_url = None #"http://localhost:5000"
     for arg in sys.argv:
         if arg.lower().startswith("coord_folder="):
             coordination_root_path = arg.lower().replace("coord_folder=", "").strip()
@@ -117,6 +117,6 @@ if __name__ == '__main__':
     if osrm_server_base_url is None:
         raise Exception(f"Invalid osrm_url!")
 
-    DistanceDurationCalculationAllApp(coordination_root_path=coordination_root_path,
-                                      result_root_path=result_root_path,
-                                      osrm_server_base_url=osrm_server_base_url).start()
+    DistanceDurationCalculationAllApp(in_coordination_root_path=coordination_root_path,
+                                      in_result_root_path=result_root_path,
+                                      in_osrm_server_base_url=osrm_server_base_url).start()

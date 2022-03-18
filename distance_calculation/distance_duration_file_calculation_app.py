@@ -16,10 +16,10 @@ from coordination_schmea import CoordinationRequestSchema, DistanceDurationSchem
 class DistanceDurationCalculationFileApp:
     writing_chunk = 2000
 
-    def __init__(self, coordination_file_path: str, result_file_path: str, osrm_server_base_url: str):
-        self.coordination_file_path = coordination_file_path
-        self.result_file_path = result_file_path
-        self.osrm_server_base_url = osrm_server_base_url
+    def __init__(self, in_coordination_file_path: str, in_result_file_path: str, in_osrm_server_base_url: str):
+        self.coordination_file_path = in_coordination_file_path
+        self.result_file_path = in_result_file_path
+        self.osrm_server_base_url = in_osrm_server_base_url
 
     def start(self):
         logger.info(f"Calculating Distance and Duration for coordination file '{self.coordination_file_path}'")
@@ -171,6 +171,6 @@ if __name__ == '__main__':
     if osrm_server_base_url is None:
         raise Exception(f"Invalid osrm_url!")
 
-    DistanceDurationCalculationFileApp(coordination_file_path=coordination_file_path,
-                                       result_file_path=result_file_path,
-                                       osrm_server_base_url=osrm_server_base_url).start()
+    DistanceDurationCalculationFileApp(in_coordination_file_path=coordination_file_path,
+                                       in_result_file_path=result_file_path,
+                                       in_osrm_server_base_url=osrm_server_base_url).start()
