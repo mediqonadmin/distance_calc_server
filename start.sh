@@ -20,3 +20,6 @@ rm distance_calc_server.7z
 
 sudo chmod 777 *.sh
 
+sudo chmod 777 ./binding/*
+
+
