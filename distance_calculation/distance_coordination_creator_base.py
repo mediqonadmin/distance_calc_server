@@ -4,12 +4,11 @@ from typing import Dict, List
 import pandas as pd
 from loguru import logger
 
-from coordination_schmea import CoordinationItemSchema, CoordinationRequestSchema
+from coordination_schmea import CoordinationItemSchema, CoordinationRequestSchema, DistanceCoordinationFileHelper
 import time
 
 
 class DistanceCoordinationCreatorBase:
-    coordination_file_prefix: str = "coordination_items_"
 
     def __init__(self, read_data_chunk_size: int, proceed_saving_folder: str, if_exists: str):
         self.read_data_chunk_size = read_data_chunk_size
@@ -122,5 +121,5 @@ class DistanceCoordinationCreatorBase:
 
     def _get_new_temp_file_path(self, index: int):
         index_str = "%010d" % (index,)
-        filepath = os.path.join(self.proceed_saving_folder, f"{self.coordination_file_prefix}{index_str}.csv")
+        filepath = os.path.join(self.proceed_saving_folder, f"{DistanceCoordinationFileHelper.coordination_file_prefix}{index_str}.csv")
         return filepath

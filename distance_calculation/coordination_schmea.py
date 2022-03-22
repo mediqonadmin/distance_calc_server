@@ -32,3 +32,8 @@ DistanceDurationDbTypes = {DistanceDurationSchema.key1: 'str',
                            DistanceDurationSchema.key2: 'str',
                            DistanceDurationSchema.duration: 'float',
                            DistanceDurationSchema.distance: 'float'}
+
+
+class DistanceCoordinationFileHelper:
+    coordination_file_prefix: str = "coordination_items_"
+    result_file_prefix = "results_items_"

@@ -1,12 +1,9 @@
-import json
-import os
 from typing import Dict, List
 
-import pandas as pd
 from loguru import logger
+from pyspark.sql import DataFrame
 
-from pyspark.sql.functions import col, concat, lit, when
-from pyspark.sql.types import StructType, StructField, StringType, DoubleType, DecimalType
+from pyspark.sql.functions import col, count, max
 
 from de.mediqon.apps.geografie.distance_calculation.distance_coordination_creator_base import \
     DistanceCoordinationCreatorBase as DCCreator
@@ -14,10 +11,9 @@ from de.mediqon.core.spark_app import SparkApp
 
 from de.mediqon.etl.read.db_reader import DatabaseReader
 from de.mediqon.etl.schemas.source.krankenhaus.qb_kh_stamm_source_schema import QB_KH_STAMM_SOURCE_TABLE, \
-    QbKhStammSourceSchema
+    QbKhStammSourceSchema as QKS_Schema
 
 from de.mediqon.etl.schemas.tableau_geografie.geografie_basic import GEOGRAFIE_BASIC_TABLE, GeografieBasicSchema
-import time
 
 
 class KhPlzDistanceCoordinationCreatorApp(SparkApp):
@@ -56,15 +52,7 @@ class KhPlzDistanceCoordinationCreatorApp(SparkApp):
     @staticmethod
     def _get_plz_list() -> List[Dict]:
 
-        logger.debug(f"Retrieving the plz list from {GEOGRAFIE_BASIC_TABLE.full_db_path}")
-
-        df = DatabaseReader(GEOGRAFIE_BASIC_TABLE.db).read(GEOGRAFIE_BASIC_TABLE, skip_schema_validation=True)
-        df = df.select(GeografieBasicSchema.plz.NAME,
-                       GeografieBasicSchema.longitude_plz.COL.cast("double"),
-                       GeografieBasicSchema.latitude_plz.COL.cast("double")).orderBy(GeografieBasicSchema.plz.COL.asc())
-        df = df.filter(GeografieBasicSchema.latitude_plz.COL.isNotNull() &
-                       GeografieBasicSchema.longitude_plz.COL.isNotNull())
-        df = df.distinct()
+        df = KhPlzDistanceCoordinationCreatorApp.get_plz_list_dataframe()
 
         results = df.collect()
 
@@ -75,49 +63,57 @@ class KhPlzDistanceCoordinationCreatorApp(SparkApp):
         return plz_list
 
     @staticmethod
-    def _get_kh_key_list() -> List[Dict]:
+    def get_plz_list_dataframe():
+        logger.debug(f"Retrieving the plz list from {GEOGRAFIE_BASIC_TABLE.full_db_path}")
+        df = DatabaseReader(GEOGRAFIE_BASIC_TABLE.db).read(GEOGRAFIE_BASIC_TABLE, skip_schema_validation=True)
+        df = df.select(GeografieBasicSchema.plz.NAME,
+                       GeografieBasicSchema.longitude_plz.COL.cast("double"),
+                       GeografieBasicSchema.latitude_plz.COL.cast("double")).orderBy(GeografieBasicSchema.plz.COL.asc())
+        df = df.filter(GeografieBasicSchema.latitude_plz.COL.isNotNull() &
+                       GeografieBasicSchema.longitude_plz.COL.isNotNull())
+        df = df.distinct()
+        return df
+
+    @staticmethod
+    def get_kh_key_dataframe() -> DataFrame:
 
         logger.debug(f"Retrieving the kh_key list from {QB_KH_STAMM_SOURCE_TABLE.full_db_path}")
 
-        df = DatabaseReader(QB_KH_STAMM_SOURCE_TABLE.db).read(QB_KH_STAMM_SOURCE_TABLE, skip_schema_validation=True)
+        kh_key_read_df = DatabaseReader(QB_KH_STAMM_SOURCE_TABLE.db).read(QB_KH_STAMM_SOURCE_TABLE,
+                                                                          skip_schema_validation=True)
 
-        gueltig_bis_list = df.select(QbKhStammSourceSchema.gueltig_bis). \
-            distinct(). \
-            orderBy(QbKhStammSourceSchema.gueltig_bis.COL.desc()) \
-            .collect()
-        assert len(gueltig_bis_list) > 0, "There must be minimum one item in gueltig_bis_list"
+        kh_key_df = kh_key_read_df.select(QKS_Schema.kh_key.NAME,
+                                          QKS_Schema.longitude.COL.cast("double"),
+                                          QKS_Schema.latitude.COL.cast("double"),
+                                          QKS_Schema.relevanz.NAME,
+                                          QKS_Schema.gueltig_bis.NAME).orderBy(
+            QKS_Schema.kh_key.COL.asc())
 
-        gueltig_bis_list = [r["gueltig_bis"] for r in gueltig_bis_list if r["gueltig_bis"] is not None]
+        kh_key_df = kh_key_df.filter(QKS_Schema.longitude.COL.isNotNull() &
+                                     QKS_Schema.latitude.COL.isNotNull() &
+                                     QKS_Schema.gueltig_bis.COL.isNull()).distinct()
 
-        df = df.select(QbKhStammSourceSchema.kh_key.NAME,
-                       QbKhStammSourceSchema.longitude.COL.cast("double"),
-                       QbKhStammSourceSchema.latitude.COL.cast("double"),
-                       QbKhStammSourceSchema.gueltig_bis.NAME).orderBy(QbKhStammSourceSchema.kh_key.COL.asc())
+        kh_key_max_df = \
+            kh_key_read_df.filter(QKS_Schema.gueltig_bis.COL.isNull()).\
+                groupBy(QKS_Schema.kh_key.NAME). \
+                agg(max(QKS_Schema.relevanz.NAME).alias("max_relevanz"))
 
-        df = df.filter(QbKhStammSourceSchema.longitude.COL.isNotNull() &
-                       QbKhStammSourceSchema.latitude.COL.isNotNull())
+        condition = (kh_key_df[QKS_Schema.kh_key.NAME] == kh_key_max_df[QKS_Schema.kh_key.NAME]) & (kh_key_df[QKS_Schema.relevanz.NAME] == kh_key_max_df["max_relevanz"])
+        kh_key_joined_df = kh_key_df.alias("m").join(kh_key_max_df.alias("mx"), condition, "inner")
 
-        result_df = df
-        if len(gueltig_bis_list) > 0:
-            last_gueltig_bis = gueltig_bis_list[0]
-            current_df = df.filter(QbKhStammSourceSchema.gueltig_bis.COL.isNull())
-            last_df = df.filter(QbKhStammSourceSchema.gueltig_bis.COL == last_gueltig_bis)
+        kh_key_joined_df = kh_key_joined_df.select("m.*")
 
-            result_df = current_df.alias("c").join(last_df.alias("o"),
-                                                   current_df[QbKhStammSourceSchema.kh_key.NAME] == last_df[
-                                                       QbKhStammSourceSchema.kh_key.NAME], how="left")
-            result_df = \
-                result_df.filter((col("c.longitude") != col("o.longitude")) |
-                                 (col("c.latitude") != col("o.latitude")) |
-                                 col("o.longitude").isNull() |
-                                 col("o.latitude").isNull())
+        return kh_key_joined_df
 
-        result_df = result_df.select("c.*").distinct()
+    @staticmethod
+    def _get_kh_key_list() -> List[Dict]:
 
-        results = result_df.collect()
+        kh_key_df = KhPlzDistanceCoordinationCreatorApp.get_kh_key_dataframe()
+        results = kh_key_df.collect()
         kh_key_list = [DCCreator.create_coordination_item(key=r["kh_key"],
                                                           latitude=r["latitude"],
                                                           longitude=r["longitude"]) for r in results]
+
         return kh_key_list
 
 

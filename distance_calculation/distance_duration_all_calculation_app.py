@@ -7,7 +7,7 @@ from typing import Dict, List
 import pandas as pd
 from loguru import logger
 
-
+from de.mediqon.apps.geografie.distance_calculation.coordination_schmea import DistanceCoordinationFileHelper
 from distance_coordination_creator_base import DistanceCoordinationCreatorBase
 
 
@@ -90,7 +90,7 @@ class DistanceDurationCalculationAllApp:
 
     def _extract_coordination_files_list(self) -> List[Dict]:
         files_list = [f for f in os.listdir(self.coordination_root_path) if f.lower().endswith(".csv") and
-                      f.lower().startswith(DistanceCoordinationCreatorBase.coordination_file_prefix)]
+                      f.lower().startswith(DistanceCoordinationFileHelper.coordination_file_prefix)]
 
         files_list = [{"source": os.path.join(self.coordination_root_path, f),
                        "result": self._extract_result_file_name(f),
@@ -102,9 +102,9 @@ class DistanceDurationCalculationAllApp:
 
     def _extract_result_file_name(self, source_file_name) -> str:
 
-        file_index = source_file_name.replace(DistanceCoordinationCreatorBase.coordination_file_prefix, "").replace(".csv",
-                                                                                                                 "")
-        return os.path.join(self.result_root_path, f"results_items_{file_index}.csv")
+        file_index = \
+            source_file_name.replace(DistanceCoordinationFileHelper.coordination_file_prefix, "").replace(".csv", "")
+        return os.path.join(self.result_root_path, f"{DistanceCoordinationFileHelper.result_file_prefix}{file_index}.csv")
 
     def _extract_archive_file_name(self, source_file_name) -> str:
 

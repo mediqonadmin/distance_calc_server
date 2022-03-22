@@ -82,32 +82,29 @@ class DistanceDurationCalculationFileApp:
             last_proceed_count += 1
 
             if last_proceed_count >= self.writing_chunk:
-                logger.debug(f"Write {len(pd_data[CoordinationRequestSchema.key1])} from {total_items} in '{self.result_file_path}' ...")
-
-                if os.path.exists(self.result_file_path):
-                    os.remove(self.result_file_path)
-
-                result_file_parent_folder = os.path.dirname(self.result_file_path)
-                if not os.path.exists(result_file_parent_folder):
-                    os.mkdir(result_file_parent_folder)
-
-                pd_df = pd.DataFrame.from_dict(pd_data)
-                pd_df.to_csv(self.result_file_path, index=False, sep=";")
+                self._write_results_in_csv(pd_data, total_items)
 
                 last_proceed_count = 0
+
+        if last_proceed_count > 0:
+            self._write_results_in_csv(pd_data, total_items)
 
         logger.debug(f"End of Retrieve {total_items} distances from the coordination list.")
         shutil.move(self.coordination_file_path, self.archive_file_path)
         logger.debug(f"File '{self.coordination_file_path}' moved to archive: '{self.archive_file_path}'")
 
-        if last_proceed_count > 0:
-            if os.path.exists(self.result_file_path):
-                os.remove(self.result_file_path)
-
-            pd_df = pd.DataFrame.from_dict(pd_data)
-            pd_df.to_csv(self.result_file_path, index=False, sep=";")
-
         logger.debug(f"Retrieve {total_items} distances from the coordination list is done. {(time.time() - start_time)}")
+
+    def _write_results_in_csv(self, pd_data, total_items):
+        logger.debug(
+            f"Write {len(pd_data[CoordinationRequestSchema.key1])} from {total_items} in '{self.result_file_path}' ...")
+        if os.path.exists(self.result_file_path):
+            os.remove(self.result_file_path)
+        result_file_parent_folder = os.path.dirname(self.result_file_path)
+        if not os.path.exists(result_file_parent_folder):
+            os.mkdir(result_file_parent_folder)
+        pd_df = pd.DataFrame.from_dict(pd_data)
+        pd_df.to_csv(self.result_file_path, index=False, sep=";")
 
     @staticmethod
     def _get_driving_distance(server_base_url: str, long_src: str, lat_src: str, long_tgt: str, lat_tgt: str):
