@@ -1,14 +1,11 @@
-import json
 import os
 import subprocess
 import sys
 from typing import Dict, List
 
-import pandas as pd
 from loguru import logger
 
-from de.mediqon.apps.geografie.distance_calculation.coordination_schmea import DistanceCoordinationFileHelper
-from distance_coordination_creator_base import DistanceCoordinationCreatorBase
+from coordination_schmea import DistanceCoordinationFileHelper
 
 
 class DistanceDurationCalculationAllApp:
