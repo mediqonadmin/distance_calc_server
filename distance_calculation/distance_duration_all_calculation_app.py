@@ -89,6 +89,8 @@ class DistanceDurationCalculationAllApp:
         files_list = [f for f in os.listdir(self.coordination_root_path) if f.lower().endswith(".csv") and
                       f.lower().startswith(DistanceCoordinationFileHelper.coordination_file_prefix)]
 
+        files_list.sort()
+        
         files_list = [{"source": os.path.join(self.coordination_root_path, f),
                        "result": self._extract_result_file_name(f),
                        "archive": self._extract_archive_file_name(f),

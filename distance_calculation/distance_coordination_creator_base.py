@@ -4,7 +4,7 @@ from typing import Dict, List
 import pandas as pd
 from loguru import logger
 
-from coordination_schmea import CoordinationItemSchema, CoordinationRequestSchema, DistanceCoordinationFileHelper
+from de.mediqon.apps.geografie.distance_calculation.coordination_schmea import CoordinationItemSchema, CoordinationRequestSchema, DistanceCoordinationFileHelper
 import time
 
 

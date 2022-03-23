@@ -7,6 +7,7 @@ from pyspark.sql.functions import col, count, max
 
 from de.mediqon.apps.geografie.distance_calculation.distance_coordination_creator_base import \
     DistanceCoordinationCreatorBase as DCCreator
+
 from de.mediqon.core.spark_app import SparkApp
 
 from de.mediqon.etl.read.db_reader import DatabaseReader

@@ -1,0 +1,48 @@
+AWS access key
+
+
+Access key ID: AKIAQHCYZTWAWCCN7RZ5
+Secret access key: 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
+
+
+------------------------------------------------------------------------------------------------
+AWS S3:
+
+https://docs.aws.amazon.com/cli/latest/reference/s3/
+
+aws s3 ls 
+aws s3 ls s3://coordination-data
+
+aws s3 cp  s3://coordination-data/coordination_items_0000000000.csv /home/admin
+
+aws s3 cp  s3://coordination-data/ /home/admin/osrm/coordination_data --recursive
+
+aws s3 cp  /home/admin/osrm/distance_duration_data s3://distance-duration-data/ --recursive
+
+------------------------------------------------------------------------------------------------
+AWS Credencial Config
+
+aws configure
+
+region name : eu-central-1
+
+------------------------------------------------------------------------------------------------
+Python script example:
+
+
+python3 ./distance_duration_all_calculation_app.py coord_folder=/home/admin/osrm/coordination_data archive_folder=/home/admin/osrm/coordination_data/archive result_folder=/home/admin/osrm/distance_duration_data  osrm_url=http://localhost:5000
+
+------------------------------------------------------------------------------------------------
+Packing files example:
+
+tar cfz arc.tgz *
+
+
+------------------------------------------------------------------------------------------------
+Update and downloading just pythong codes
+
+rm -rf ./distance_calculation
+wget https://github.com/mediqonadmin/distance_calc_server/raw/main/distance_calculation.7z
+7zr x distance_calculation.7z
+rm distance_calculation.7z
+

@@ -6,7 +6,7 @@ import pandas as pd
 from loguru import logger
 
 from pyspark.sql.dataframe import DataFrame
-from pyspark.sql.functions import col, concat, lit, when, max
+from pyspark.sql.functions import col, concat, lit, when, count
 from pyspark.sql.types import StructType, StructField, StringType, DoubleType
 
 from de.mediqon.apps.geografie.distance_calculation.coordination_schmea import DistanceCoordinationFileHelper, \
@@ -17,13 +17,12 @@ from de.mediqon.etl.etl_constants import EtlConstants as E
 
 from de.mediqon.core.spark_app import SparkApp
 from de.mediqon.etl.read.db_reader import DatabaseReader
-from de.mediqon.etl.schemas.source.krankenhaus.qb_kh_stamm_source_schema import QB_KH_STAMM_SOURCE_TABLE, \
-    QbKhStammSourceSchema as QKS_Schema
+from de.mediqon.etl.schemas.source.krankenhaus.qb_kh_stamm_source_schema import QbKhStammSourceSchema as QKS_Schema
 from de.mediqon.etl.schemas.source.geografie.distanzen_standort_plz_schema import DISTANZEN_STANDORT_PLZ_SOURCE_TABLE, \
     DistanzenStandortPlzSourceSchema as DSP_Schema
 from de.mediqon.etl.schemas.tableau_geografie.distanzen_standort_plz import DISTANZEN_STANDORT_PLZ_TABLE, \
     DistanzenStandortPlzSchema
-from de.mediqon.etl.schemas.tableau_geografie.geografie_basic import GEOGRAFIE_BASIC_TABLE, GeografieBasicSchema
+from de.mediqon.etl.schemas.tableau_geografie.geografie_basic import GeografieBasicSchema
 
 from de.mediqon.etl.write.db_writer import DatabaseWriter
 from de.mediqon.etl.write.generic_versioning import GenericVersioning
@@ -31,10 +30,10 @@ from de.mediqon.utils.db.db_constants import DBConstants
 from de.mediqon.utils.spark.df_utils import cache_df
 
 
-class DistanceDurationCsvApp(SparkApp):
+class DistanceDurationCsvDbWriterApp(SparkApp):
 
     def __init__(self):
-        super(DistanceDurationCsvApp, self).__init__(app_name="Write Distance Duration In DB")
+        super(DistanceDurationCsvDbWriterApp, self).__init__(app_name="Write Distance Duration In DB")
 
     source_table = DISTANZEN_STANDORT_PLZ_SOURCE_TABLE
     tableau_table = DISTANZEN_STANDORT_PLZ_TABLE
@@ -57,6 +56,17 @@ class DistanceDurationCsvApp(SparkApp):
         gueltig_ab_date = date.today().strftime("%Y%m%d")
 
         kh_key_data_list = self._extract_kh_key_data_from_files(csv_file_list)
+        plz_count = plz_df.count()
+
+        unclear_kh_list = []
+        for kh_key in kh_key_data_list:
+            lst = kh_key_data_list[kh_key]
+            if len(lst) != plz_count:
+                unclear_kh_list.append(kh_key)
+
+        if len(unclear_kh_list) > 0:
+            raise Exception(f"The distance and duration data for these kh_keys "
+                            f"does not cover all PLZ list:\n {unclear_kh_list}")
 
         self._prepare_write_kh_key_data(gueltig_ab_date, kh_key_data_list, kh_key_df, plz_df)
 
@@ -68,12 +78,16 @@ class DistanceDurationCsvApp(SparkApp):
         total = len(kh_key_data_list.keys())
         p_index = 1
         for kh_key in kh_key_data_list:
-            kh_key = '260510860|01'
             logger.debug(f"Prepare and write t5he data of kh_key '{kh_key}' in db ... ({p_index}/{total})")
             data = kh_key_data_list[kh_key]
             data = [list(i.values()) for i in data]
             dist_dur_df = self._create_dataframe(data, kh_key_df, plz_df)
             #dist_dur_df.show()
+
+            test_df = dist_dur_df.groupBy("kh_key", "plz").agg(count("*").alias("count")).orderBy(col("count").desc())
+            test_df_count = test_df.count()
+            if test_df_count != plz_df.count():
+                logger.error(f"The kh_key: {kh_key} hast {test_df_count} but must have {plz_df.count()}")
 
             self._write_with_versioning(dist_dur_df, kh_key, gueltig_ab_date)
             p_index += 1
@@ -229,4 +243,4 @@ class DistanceDurationCsvApp(SparkApp):
 
 
 if __name__ == '__main__':
-    DistanceDurationCsvApp().main()
+    DistanceDurationCsvDbWriterApp().main()
