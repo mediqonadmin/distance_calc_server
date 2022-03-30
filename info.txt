@@ -42,7 +42,7 @@ tar cfz arc.tgz *
 Update and downloading just pythong codes
 
 rm -rf ./distance_calculation
-wget https://github.com/mediqonadmin/distance_calc_server/raw/main/distance_calculation.7z
+wget https://github.com/mediqonadmin/distance_calc_server/raw/master/distance_calculation.7z
 7zr x distance_calculation.7z
 rm distance_calculation.7z
 
