@@ -1,6 +1,6 @@
 import os
 from datetime import date
-from typing import Dict, List
+from typing import Dict, List, Set
 
 import pandas as pd
 from loguru import logger
@@ -17,11 +17,12 @@ from de.mediqon.etl.etl_constants import EtlConstants as E
 
 from de.mediqon.core.spark_app import SparkApp
 from de.mediqon.etl.read.db_reader import DatabaseReader
+from de.mediqon.etl.read.query_reader import QueryReader
+from de.mediqon.etl.schemas.source.geografie.kh_key_ohne_distanzen_schema import KhKeyOhneDistanzenSchema, \
+    KH_KEY_OHNE_DISTANZEN_TABLE
 from de.mediqon.etl.schemas.source.krankenhaus.qb_kh_stamm_source_schema import QbKhStammSourceSchema as QKS_Schema
 from de.mediqon.etl.schemas.source.geografie.distanzen_standort_plz_schema import DISTANZEN_STANDORT_PLZ_SOURCE_TABLE, \
     DistanzenStandortPlzSourceSchema as DSP_Schema
-from de.mediqon.etl.schemas.tableau_geografie.distanzen_standort_plz import DISTANZEN_STANDORT_PLZ_TABLE, \
-    DistanzenStandortPlzSchema
 from de.mediqon.etl.schemas.tableau_geografie.geografie_basic import GeografieBasicSchema
 
 from de.mediqon.etl.write.db_writer import DatabaseWriter
@@ -33,10 +34,9 @@ from de.mediqon.utils.spark.df_utils import cache_df
 class DistanceDurationCsvDbWriterApp(SparkApp):
 
     def __init__(self):
-        super(DistanceDurationCsvDbWriterApp, self).__init__(app_name="Write Distance Duration In DB")
+        super(DistanceDurationCsvDbWriterApp, self).__init__(app_name="Write Distance Duration from CSV In Source DB")
 
     source_table = DISTANZEN_STANDORT_PLZ_SOURCE_TABLE
-    tableau_table = DISTANZEN_STANDORT_PLZ_TABLE
 
     read_data_chunk_size = 1000
 
@@ -44,8 +44,23 @@ class DistanceDurationCsvDbWriterApp(SparkApp):
 
         logger.info(f"Writing distance and duration's from csv files in db")
 
+        gueltig_ab_date = kwargs.get("gueltig_ab_date", None)
+        if gueltig_ab_date is None:
+            raise Exception("There is no gueltig_ab_date in argument's.")
+
+        gueltig_ab_date = str(gueltig_ab_date)
+        #gueltig_ab_date = date.today().strftime("%Y%m%d")
+
+        gueltig_ab_today = f"{gueltig_ab_date[:4]}-{gueltig_ab_date[4:6]}-{gueltig_ab_date[6:8]}" #date.today().strftime("%Y-%m-%d")
+
         root_folder = self._get_root_folder()
         csv_file_list = self._extract_csv_files(root_folder)
+
+        all_kh_key_list = self._extract_all_kh_key_list(csv_file_list)
+
+        self._process_invalid_kh_key_items(all_kh_key_list, gueltig_ab_today)
+
+        proceed_kh_key_list = self._extract_proceed_kh_key_list(gueltig_ab_today)
 
         plz_df = KhPlzDistanceCoordinationCreatorApp.get_plz_list_dataframe()
         kh_key_df = KhPlzDistanceCoordinationCreatorApp.get_kh_key_dataframe()
@@ -53,9 +68,7 @@ class DistanceDurationCsvDbWriterApp(SparkApp):
         cache_df(plz_df)
         cache_df(kh_key_df)
 
-        gueltig_ab_date = date.today().strftime("%Y%m%d")
-
-        kh_key_data_list = self._extract_kh_key_data_from_files(csv_file_list)
+        kh_key_data_list = self._extract_kh_key_data_from_files(csv_file_list, proceed_kh_key_list)
         plz_count = plz_df.count()
 
         unclear_kh_list = []
@@ -68,20 +81,105 @@ class DistanceDurationCsvDbWriterApp(SparkApp):
             raise Exception(f"The distance and duration data for these kh_keys "
                             f"does not cover all PLZ list:\n {unclear_kh_list}")
 
-        self._prepare_write_kh_key_data(gueltig_ab_date, kh_key_data_list, kh_key_df, plz_df)
+        self._prepare_write_kh_key_data(gueltig_ab_date, kh_key_data_list, kh_key_df, plz_df, proceed_kh_key_list)
 
-        self._write_without_versioning()
+        self.cleanup_cached_dataframes()
 
         logger.debug(f"Writing versioned data in db is done.")
 
-    def _prepare_write_kh_key_data(self, gueltig_ab_date, kh_key_data_list, kh_key_df, plz_df):
+    def _process_invalid_kh_key_items(self, all_kh_key_list: List[str], gueltig_ab_today: str):
+        logger.debug(f"Processing the list of kh_key's without distance in {self.source_table.full_db_path}")
+
+        exists_kh_key_filter = "', '".join(all_kh_key_list)
+        exists_kh_key_filter = f"'{exists_kh_key_filter}'"
+        sql = f"select distinct {QKS_Schema.kh_key.NAME},{QKS_Schema.gueltig_ab.NAME},{QKS_Schema.gueltig_bis.NAME} " \
+              f"FROM {self.source_table.name_with_schema} " \
+              f"where {QKS_Schema.gueltig_bis.NAME} is null " \
+              f"and {QKS_Schema.gueltig_ab.NAME} != '{gueltig_ab_today}' " \
+              f"and {QKS_Schema.kh_key.NAME} not in ({exists_kh_key_filter}) " \
+              f"order by kh_key"
+        df = QueryReader(self.source_table.db).read(sql_query=sql)
+        if df.count() == 0:
+            logger.debug(f"There is no kh_key's without distance in database")
+            return
+
+        self._write_invalid_kh_keys_in_db(df, gueltig_ab_today)
+
+        not_valid_items = df.collect()
+        for not_valid_item in not_valid_items:
+            kh_key = not_valid_item[QKS_Schema.kh_key.NAME]
+            gueltig_ab = not_valid_item[QKS_Schema.gueltig_ab.NAME]
+            gueltig_bis = not_valid_item[QKS_Schema.gueltig_bis.NAME]
+
+            update_sql = f"update {self.source_table.name_with_schema} " \
+                         f"set {QKS_Schema.gueltig_bis.NAME} = '{gueltig_ab_today}' " \
+                         f"where {QKS_Schema.kh_key.NAME}='{kh_key}' and {QKS_Schema.gueltig_ab.NAME}='{gueltig_ab}'"
+            DBConstants().db_connector.execute_sql(db=self.source_table.db, sql=update_sql)
+
+        logger.debug(f"{len(not_valid_items)} kh_key's without distance is updated to in database")
+
+    @staticmethod
+    def _write_invalid_kh_keys_in_db(df: DataFrame, gueltig_ab_today: str):
+        logger.debug(f"Write the list of kh_key's without distance in database")
+
+        kh_key_items_df = df.select(QKS_Schema.kh_key.NAME).distinct()
+        kh_key_items_df = kh_key_items_df.withColumn(KhKeyOhneDistanzenSchema.gueltig_ab.NAME,
+                                                     lit(gueltig_ab_today).cast("timestamp"))
+        DatabaseWriter(KH_KEY_OHNE_DISTANZEN_TABLE.db).write(df=kh_key_items_df,
+                                                             table=KH_KEY_OHNE_DISTANZEN_TABLE,
+                                                             save_mode="overwrite")
+        logger.debug(f"{kh_key_items_df.count()} kh_key's without distance is written in {KH_KEY_OHNE_DISTANZEN_TABLE.full_db_path}")
+
+    @staticmethod
+    def _extract_all_kh_key_list(csv_file_list: List[str]) -> List[str]:
+        logger.debug(f"Extracting all kh_key list from csv files ...")
+        all_kh_key_list = []
+        for csv_file in csv_file_list:
+            csv_pd_df = pd.read_csv(csv_file, dtype=DistanceDurationDbTypes, sep=";")
+            kh_key_item = list(csv_pd_df[DistanceDurationSchema.key1].unique())
+            all_kh_key_list += kh_key_item
+        all_kh_key_list = list(set(all_kh_key_list))
+        return all_kh_key_list
+
+    def _extract_proceed_kh_key_list(self, gueltig_ab_today):
+        sql_query = f"SELECT distinct {DSP_Schema.kh_key} FROM {self.source_table.name_with_schema} where {DSP_Schema.gueltig_ab} = '{gueltig_ab_today}' and {DSP_Schema.gueltig_bis} is null"
+        df = QueryReader(self.source_table.db).read(sql_query=sql_query)
+
+        rows = df.collect()
+        proceed_kh_key_list = [r[0] for r in rows]
+        logger.debug(f"{len(proceed_kh_key_list)} kh_kex's are proceed.")
+
+        return proceed_kh_key_list
+
+    def _prepare_write_kh_key_data(self,
+                                   gueltig_ab_date: str,
+                                   kh_key_data_list: Dict,
+                                   kh_key_df: DataFrame,
+                                   plz_df: DataFrame,
+                                   proceed_kh_key_list: List[str]):
+        plz_src_list = plz_df.collect()
+        plz_src_list = {p[GeografieBasicSchema.plz.NAME]: p for p in plz_src_list}
+
         total = len(kh_key_data_list.keys())
         p_index = 1
+
         for kh_key in kh_key_data_list:
-            logger.debug(f"Prepare and write t5he data of kh_key '{kh_key}' in db ... ({p_index}/{total})")
-            data = kh_key_data_list[kh_key]
-            data = [list(i.values()) for i in data]
-            dist_dur_df = self._create_dataframe(data, kh_key_df, plz_df)
+            logger.debug(f"Prepare and write the data of kh_key '{kh_key}' in db ... ({p_index}/{total})")
+
+            kh_key_data = kh_key_df.filter(col("kh_key") == kh_key).collect()[0]
+
+            data_list = kh_key_data_list[kh_key]
+            data_list = [list(i.values()) for i in data_list]
+            for i in range(0, len(data_list)):
+                data_list[i].append(kh_key_data[QKS_Schema.latitude.NAME])
+                data_list[i].append(kh_key_data[QKS_Schema.longitude.NAME])
+                plz = data_list[i][1]
+                plz_src_item = plz_src_list[plz]
+                data_list[i].append(plz_src_item[GeografieBasicSchema.latitude_plz.NAME])
+                data_list[i].append(plz_src_item[GeografieBasicSchema.longitude_plz.NAME])
+                data_list[i].append(data_list[i][0] + data_list[i][1])
+
+            dist_dur_df = self._create_dataframe(data_list)
             #dist_dur_df.show()
 
             test_df = dist_dur_df.groupBy("kh_key", "plz").agg(count("*").alias("count")).orderBy(col("count").desc())
@@ -93,13 +191,15 @@ class DistanceDurationCsvDbWriterApp(SparkApp):
             p_index += 1
 
     @staticmethod
-    def _extract_kh_key_data_from_files(csv_file_list: List[str]) -> Dict:
+    def _extract_kh_key_data_from_files(csv_file_list: List[str], proceed_kh_key_list: List[str]) -> Dict:
         logger.debug(f"Reading distance and duration's from csv files ...")
         kh_key_data_list = {}
         for csv_file in csv_file_list:
             logger.debug(f"Reading data from {csv_file} ...")
-            csv_pd_fd = pd.read_csv(csv_file, dtype=DistanceDurationDbTypes, sep=";")
-            pd_data_list = csv_pd_fd.to_dict(orient='records')
+            csv_pd_df = pd.read_csv(csv_file, dtype=DistanceDurationDbTypes, sep=";")
+            if len(proceed_kh_key_list) > 0:
+                csv_pd_df = csv_pd_df[~csv_pd_df[DistanceDurationSchema.key1].isin(proceed_kh_key_list)]
+            pd_data_list = csv_pd_df.to_dict(orient='records')
             kh_key_list = [f[DistanceDurationSchema.key1] for f in pd_data_list]
             kh_key_list = set(kh_key_list)
             for kh_key in kh_key_list:
@@ -111,7 +211,7 @@ class DistanceDurationCsvDbWriterApp(SparkApp):
             #if len(kh_key_data_list.keys()) > 3:
             #    break
         logger.debug(f"Reading distance and duration's from csv files is finish")
-        logger.debug(f"There is {len(kh_key_data_list.keys())} kh_keys in {len(csv_file_list)} csv files.")
+        logger.debug(f"There is {len(kh_key_data_list.keys())} not proceed kh_key's in {len(csv_file_list)} csv files.")
         return kh_key_data_list
 
     @staticmethod
@@ -138,103 +238,32 @@ class DistanceDurationCsvDbWriterApp(SparkApp):
         data_files.sort()
         return data_files
 
-    def _create_dataframe(self, dist_stand_list, kh_key_df: DataFrame, plz_df: DataFrame):
+    def _create_dataframe(self, data_list):
         dist_stand_schema = StructType([
             StructField(DSP_Schema.kh_key.NAME, StringType()),
             StructField(DSP_Schema.plz.NAME, StringType()),
             StructField(DSP_Schema.fahrstrecke_km.NAME, DoubleType()),
-            StructField(DSP_Schema.fahrzeit_min.NAME, DoubleType())
+            StructField(DSP_Schema.fahrzeit_min.NAME, DoubleType()),
+            StructField(DSP_Schema.latitude_kh.NAME, DoubleType()),
+            StructField(DSP_Schema.longitude_kh.NAME, DoubleType()),
+            StructField(DSP_Schema.latitude_plz.NAME, DoubleType()),
+            StructField(DSP_Schema.longitude_plz.NAME, DoubleType()),
+            StructField(DSP_Schema.relevanz.NAME, StringType())
         ])
-        df = self.spark.createDataFrame(data=dist_stand_list, schema=dist_stand_schema)
+        df = self.spark.createDataFrame(data=data_list, schema=dist_stand_schema)
 
-        join_df = df.alias("d").join(kh_key_df.alias("k"),
-                                     df[DSP_Schema.kh_key.NAME] == kh_key_df[QKS_Schema.kh_key.NAME],
-                                     "left")
-
-        join_df = join_df.select("d.*",
-                                 QKS_Schema.longitude.COL.alias(DSP_Schema.longitude_kh.NAME),
-                                 QKS_Schema.latitude.COL.alias(DSP_Schema.latitude_kh.NAME))
-
-        self._verfy_unknown_data(join_df, DSP_Schema.longitude_kh.NAME)
-
-        dist_stand_df = join_df.alias("d").join(plz_df,
-                                                join_df[DSP_Schema.plz.NAME] == plz_df[
-                                                    GeografieBasicSchema.plz.NAME],
-                                                "left")
-
-        dist_stand_df = dist_stand_df.select("d.*",
-                                             GeografieBasicSchema.longitude_plz.NAME,
-                                             GeografieBasicSchema.latitude_plz.NAME)
-
-        self._verfy_unknown_data(dist_stand_df, GeografieBasicSchema.longitude_plz.NAME)
-
-        return dist_stand_df
-
-    @staticmethod
-    def _verfy_unknown_data(join_df: DataFrame, column: str):
-        test_df = join_df.filter(col(column).isNull())
-        if test_df.count() > 0:
-            unknown_list = test_df.select(DSP_Schema.kh_key.NAME).distinct().collect()
-            unknown_list = [r[DSP_Schema.kh_key.NAME] for r in unknown_list]
-            raise Exception(f"There is unknown kh_key in csv data: {unknown_list}")
-
-    def _write_without_versioning(self):
-        logger.debug(f"Read data from {self.source_table.full_db_path} as source and "
-                     f"write in {self.tableau_table.full_db_path} as tableau table")
-
-        sql = f"SELECT distinct kh_key FROM {self.source_table.name_with_schema} " \
-              f"where {DSP_Schema.gueltig_bis.NAME} is null order by kh_key;"
-
-        kh_key_list = DBConstants().db_connector.execute_sql(db=self.source_table.db, sql=sql, do_fetch="all")
-        kh_key_list = [r[0] for r in kh_key_list]
-
-        for kh_key in kh_key_list:
-            source_data_df = DatabaseReader(self.source_table.db).read(table=self.source_table, partition=kh_key)
-            source_data_df = source_data_df.filter(DSP_Schema.gueltig_bis.COL.isNull())
-
-            target_data_df = source_data_df.select(DSP_Schema.kh_key.NAME,
-                                                   DSP_Schema.plz.NAME,
-                                                   DSP_Schema.fahrstrecke_km.COL.alias(
-                                                       DistanzenStandortPlzSchema.fahrstrecke.NAME),
-                                                   DSP_Schema.fahrzeit_min.COL.alias(
-                                                       DistanzenStandortPlzSchema.fahrzeit.NAME))
-
-            fahrzeit_col = DistanzenStandortPlzSchema.fahrzeit.COL
-
-            target_data_df = target_data_df.withColumn(DistanzenStandortPlzSchema.fahrzone.NAME,
-                                                       when(fahrzeit_col < 10, lit(1)).otherwise(
-                                                           when(fahrzeit_col < 20, lit(2)).otherwise(
-                                                               when(fahrzeit_col < 30, lit(3)).otherwise(
-                                                                   when(fahrzeit_col < 40, lit(4)).otherwise(
-                                                                       when(fahrzeit_col < 50, lit(5)).otherwise(
-                                                                           when(fahrzeit_col < 60,
-                                                                                lit(6)).otherwise(lit(7))
-                                                                       )
-                                                                   )
-                                                               )
-                                                           )
-                                                       ))
-
-            target_data_df.show()
-            DatabaseWriter(self.tableau_table.db).write(target_data_df,
-                                                        table=self.tableau_table,
-                                                        save_mode="overwrite",
-                                                        partition=kh_key)
+        return df
 
     def _write_with_versioning(self, dist_dur_df: DataFrame, kh_key: str, gueltig_ab_date: str):
-        dist_dur_version_df = dist_dur_df.withColumn(DSP_Schema.relevanz.NAME,
-                                                     concat(DSP_Schema.kh_key.COL, DSP_Schema.plz.COL))
 
         versioning = GenericVersioning(
             table=self.source_table,
             gueltig_ab_date=gueltig_ab_date,
-            extended_logging=True
+            extended_logging=True,
+            partition=kh_key
         )
 
-        dist_stand_version_kh_key_df = \
-            dist_dur_version_df.filter(DSP_Schema.kh_key.COL == kh_key)
-
-        cases_to_update, cases_to_insert = versioning.calculate_upsert(data=dist_stand_version_kh_key_df,
+        cases_to_update, cases_to_insert = versioning.calculate_upsert(data=dist_dur_df,
                                                                        filter_cond=f"kh_key = '{kh_key}'")
         # cases_to_update.show()
         # cases_to_insert.show()
@@ -243,4 +272,4 @@ class DistanceDurationCsvDbWriterApp(SparkApp):
 
 
 if __name__ == '__main__':
-    DistanceDurationCsvDbWriterApp().main()
+    DistanceDurationCsvDbWriterApp().main(gueltig_ab_date="20220323")

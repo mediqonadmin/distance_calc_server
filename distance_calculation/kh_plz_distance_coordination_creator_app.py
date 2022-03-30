@@ -11,8 +11,8 @@ from de.mediqon.apps.geografie.distance_calculation.distance_coordination_creato
 from de.mediqon.core.spark_app import SparkApp
 
 from de.mediqon.etl.read.db_reader import DatabaseReader
-from de.mediqon.etl.schemas.source.krankenhaus.qb_kh_stamm_source_schema import QB_KH_STAMM_SOURCE_TABLE, \
-    QbKhStammSourceSchema as QKS_Schema
+from de.mediqon.etl.schemas.source.krankenhaus.qb_kh_geo_source_schema import QB_KH_GEO_SOURCE_TABLE, \
+    QbKhGeoSourceSchema
 
 from de.mediqon.etl.schemas.tableau_geografie.geografie_basic import GEOGRAFIE_BASIC_TABLE, GeografieBasicSchema
 
@@ -58,8 +58,8 @@ class KhPlzDistanceCoordinationCreatorApp(SparkApp):
         results = df.collect()
 
         plz_list = [DCCreator.create_coordination_item(key=r["plz"],
-                                                       latitude=r["longitude_plz"],
-                                                       longitude=r["latitude_plz"]) for r in results]
+                                                       latitude=r["latitude_plz"],
+                                                       longitude=r["longitude_plz"]) for r in results]
 
         return plz_list
 
@@ -78,28 +78,29 @@ class KhPlzDistanceCoordinationCreatorApp(SparkApp):
     @staticmethod
     def get_kh_key_dataframe() -> DataFrame:
 
-        logger.debug(f"Retrieving the kh_key list from {QB_KH_STAMM_SOURCE_TABLE.full_db_path}")
+        logger.debug(f"Retrieving the kh_key list from {QB_KH_GEO_SOURCE_TABLE.full_db_path}")
 
-        kh_key_read_df = DatabaseReader(QB_KH_STAMM_SOURCE_TABLE.db).read(QB_KH_STAMM_SOURCE_TABLE,
-                                                                          skip_schema_validation=True)
+        kh_key_read_df = DatabaseReader(QB_KH_GEO_SOURCE_TABLE.db).read(QB_KH_GEO_SOURCE_TABLE,
+                                                                        skip_schema_validation=True)
 
-        kh_key_df = kh_key_read_df.select(QKS_Schema.kh_key.NAME,
-                                          QKS_Schema.longitude.COL.cast("double"),
-                                          QKS_Schema.latitude.COL.cast("double"),
-                                          QKS_Schema.relevanz.NAME,
-                                          QKS_Schema.gueltig_bis.NAME).orderBy(
-            QKS_Schema.kh_key.COL.asc())
+        kh_key_df = kh_key_read_df.select(QbKhGeoSourceSchema.kh_key.NAME,
+                                          QbKhGeoSourceSchema.longitude.COL.cast("double"),
+                                          QbKhGeoSourceSchema.latitude.COL.cast("double"),
+                                          QbKhGeoSourceSchema.relevanz.NAME,
+                                          QbKhGeoSourceSchema.gueltig_bis.NAME).orderBy(
+            QbKhGeoSourceSchema.kh_key.COL.asc())
 
-        kh_key_df = kh_key_df.filter(QKS_Schema.longitude.COL.isNotNull() &
-                                     QKS_Schema.latitude.COL.isNotNull() &
-                                     QKS_Schema.gueltig_bis.COL.isNull()).distinct()
+        kh_key_df = kh_key_df.filter(QbKhGeoSourceSchema.longitude.COL.isNotNull() &
+                                     QbKhGeoSourceSchema.latitude.COL.isNotNull() &
+                                     QbKhGeoSourceSchema.gueltig_bis.COL.isNull()).distinct()
 
         kh_key_max_df = \
-            kh_key_read_df.filter(QKS_Schema.gueltig_bis.COL.isNull()).\
-                groupBy(QKS_Schema.kh_key.NAME). \
-                agg(max(QKS_Schema.relevanz.NAME).alias("max_relevanz"))
+            kh_key_read_df.filter(QbKhGeoSourceSchema.gueltig_bis.COL.isNull()). \
+                groupBy(QbKhGeoSourceSchema.kh_key.NAME). \
+                agg(max(QbKhGeoSourceSchema.relevanz.NAME).alias("max_relevanz"))
 
-        condition = (kh_key_df[QKS_Schema.kh_key.NAME] == kh_key_max_df[QKS_Schema.kh_key.NAME]) & (kh_key_df[QKS_Schema.relevanz.NAME] == kh_key_max_df["max_relevanz"])
+        condition = (kh_key_df[QbKhGeoSourceSchema.kh_key.NAME] == kh_key_max_df[QbKhGeoSourceSchema.kh_key.NAME]) & (
+                    kh_key_df[QbKhGeoSourceSchema.relevanz.NAME] == kh_key_max_df["max_relevanz"])
         kh_key_joined_df = kh_key_df.alias("m").join(kh_key_max_df.alias("mx"), condition, "inner")
 
         kh_key_joined_df = kh_key_joined_df.select("m.*")

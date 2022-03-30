@@ -12,7 +12,7 @@ mkdir osrm
 cd osrm
 
 
-wget https://github.com/mediqonadmin/distance_calc_server/raw/main/distance_calc_server.7z
+wget https://github.com/mediqonadmin/distance_calc_server/raw/master/distance_calc_server.7z
 
 7zr x distance_calc_server.7z
 

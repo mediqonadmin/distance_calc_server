@@ -1,8 +1,8 @@
 AWS access key
 
 
-Access key ID: AKIAQHCYZTWAWCCN7RZ5
-Secret access key: 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
+Access key ID: <Access key ID from AWS>
+Secret access key: <Secret access key from AWS>
 
 
 ------------------------------------------------------------------------------------------------

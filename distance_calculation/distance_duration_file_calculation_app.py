@@ -136,7 +136,7 @@ class DistanceDurationCalculationFileApp:
 
     @staticmethod
     def _round_float(f_value: float):
-        f_value_str = "%.2f" % f_value
+        f_value_str = "%.5f" % f_value
         f_value = float(f_value_str)
         return f_value
 
