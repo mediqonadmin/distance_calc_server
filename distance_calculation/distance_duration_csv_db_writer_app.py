@@ -45,8 +45,11 @@ class DistanceDurationCsvDbWriterApp(SparkApp):
         logger.info(f"Writing distance and duration's from csv files in db")
 
         gueltig_ab_date = kwargs.get("gueltig_ab_date", None)
-        if gueltig_ab_date is None:
-            raise Exception("There is no gueltig_ab_date in argument's.")
+        assert gueltig_ab_date is not None, "A gueltig_ab_date must be set"
+
+        input_kh_key_list = kwargs.get("kh_key_list", None)
+        assert input_kh_key_list is not None, "A kh_key_list as list of khkey's must be set"
+        assert isinstance(input_kh_key_list, List), "The kh_key_list must be list of kh_key's or empty list"
 
         gueltig_ab_date = str(gueltig_ab_date)
         #gueltig_ab_date = date.today().strftime("%Y%m%d")
@@ -56,38 +59,46 @@ class DistanceDurationCsvDbWriterApp(SparkApp):
         root_folder = self._get_root_folder()
         csv_file_list = self._extract_csv_files(root_folder)
 
-        all_kh_key_list = self._extract_all_kh_key_list(csv_file_list)
-
-        self._process_invalid_kh_key_items(all_kh_key_list, gueltig_ab_today)
-
         proceed_kh_key_list = self._extract_proceed_kh_key_list(gueltig_ab_today)
 
-        plz_df = KhPlzDistanceCoordinationCreatorApp.get_plz_list_dataframe()
-        kh_key_df = KhPlzDistanceCoordinationCreatorApp.get_kh_key_dataframe()
-
-        cache_df(plz_df)
-        cache_df(kh_key_df)
+        kh_key_df, plz_df = self._get_ply_kh_key_data(input_kh_key_list)
 
         kh_key_data_list = self._extract_kh_key_data_from_files(csv_file_list, proceed_kh_key_list)
-        plz_count = plz_df.count()
 
-        unclear_kh_list = []
-        for kh_key in kh_key_data_list:
-            lst = kh_key_data_list[kh_key]
-            if len(lst) != plz_count:
-                unclear_kh_list.append(kh_key)
+        self._verify_plz_count(kh_key_data_list, plz_df)
 
-        if len(unclear_kh_list) > 0:
-            raise Exception(f"The distance and duration data for these kh_keys "
-                            f"does not cover all PLZ list:\n {unclear_kh_list}")
+        all_kh_key_list = self._extract_all_kh_key_list(csv_file_list)
 
-        self._prepare_write_kh_key_data(gueltig_ab_date, kh_key_data_list, kh_key_df, plz_df, proceed_kh_key_list)
+        self._process_invalid_kh_key_items(all_kh_key_list, gueltig_ab_today, input_kh_key_list)
+
+        self._prepare_write_kh_key_data(gueltig_ab_date, kh_key_data_list, kh_key_df, plz_df)
 
         self.cleanup_cached_dataframes()
 
         logger.debug(f"Writing versioned data in db is done.")
 
-    def _process_invalid_kh_key_items(self, all_kh_key_list: List[str], gueltig_ab_today: str):
+    def _get_ply_kh_key_data(self, input_kh_key_list):
+        plz_df = KhPlzDistanceCoordinationCreatorApp.get_plz_list_dataframe()
+        kh_key_df = KhPlzDistanceCoordinationCreatorApp.get_kh_key_dataframe(input_kh_key_list)
+        cache_df(plz_df)
+        cache_df(kh_key_df)
+        return kh_key_df, plz_df
+
+    def _verify_plz_count(self, kh_key_data_list, plz_df):
+        plz_count = plz_df.count()
+        unclear_kh_list = []
+        for kh_key in kh_key_data_list:
+            lst = kh_key_data_list[kh_key]
+            if len(lst) != plz_count:
+                unclear_kh_list.append(kh_key)
+        if len(unclear_kh_list) > 0:
+            raise Exception(f"The distance and duration data for these kh_keys "
+                            f"does not cover all PLZ list:\n {unclear_kh_list}")
+
+    def _process_invalid_kh_key_items(self,
+                                      all_kh_key_list: List[str],
+                                      gueltig_ab_today: str,
+                                      input_kh_key_list: List[str]):
         logger.debug(f"Processing the list of kh_key's without distance in {self.source_table.full_db_path}")
 
         exists_kh_key_filter = "', '".join(all_kh_key_list)
@@ -98,6 +109,18 @@ class DistanceDurationCsvDbWriterApp(SparkApp):
               f"and {QKS_Schema.gueltig_ab.NAME} != '{gueltig_ab_today}' " \
               f"and {QKS_Schema.kh_key.NAME} not in ({exists_kh_key_filter}) " \
               f"order by kh_key"
+
+        if len(input_kh_key_list) > 0:
+            input_kh_key_list_filter = "', '".join(input_kh_key_list)
+            input_kh_key_list_filter = f"'{input_kh_key_list_filter}'"
+
+            sql = f"select distinct {QKS_Schema.kh_key.NAME},{QKS_Schema.gueltig_ab.NAME},{QKS_Schema.gueltig_bis.NAME} " \
+                  f"FROM {self.source_table.name_with_schema} " \
+                  f"where {QKS_Schema.gueltig_bis.NAME} is null " \
+                  f"and {QKS_Schema.gueltig_ab.NAME} != '{gueltig_ab_today}' " \
+                  f"and {QKS_Schema.kh_key.NAME} in ({input_kh_key_list_filter}) " \
+                  f"order by kh_key"
+
         df = QueryReader(self.source_table.db).read(sql_query=sql)
         if df.count() == 0:
             logger.debug(f"There is no kh_key's without distance in database")
@@ -109,7 +132,6 @@ class DistanceDurationCsvDbWriterApp(SparkApp):
         for not_valid_item in not_valid_items:
             kh_key = not_valid_item[QKS_Schema.kh_key.NAME]
             gueltig_ab = not_valid_item[QKS_Schema.gueltig_ab.NAME]
-            gueltig_bis = not_valid_item[QKS_Schema.gueltig_bis.NAME]
 
             update_sql = f"update {self.source_table.name_with_schema} " \
                          f"set {QKS_Schema.gueltig_bis.NAME} = '{gueltig_ab_today}' " \
@@ -147,7 +169,7 @@ class DistanceDurationCsvDbWriterApp(SparkApp):
 
         rows = df.collect()
         proceed_kh_key_list = [r[0] for r in rows]
-        logger.debug(f"{len(proceed_kh_key_list)} kh_kex's are proceed.")
+        logger.debug(f"{len(proceed_kh_key_list)} kh_key's are proceed.")
 
         return proceed_kh_key_list
 
@@ -155,8 +177,7 @@ class DistanceDurationCsvDbWriterApp(SparkApp):
                                    gueltig_ab_date: str,
                                    kh_key_data_list: Dict,
                                    kh_key_df: DataFrame,
-                                   plz_df: DataFrame,
-                                   proceed_kh_key_list: List[str]):
+                                   plz_df: DataFrame):
         plz_src_list = plz_df.collect()
         plz_src_list = {p[GeografieBasicSchema.plz.NAME]: p for p in plz_src_list}
 
@@ -166,7 +187,7 @@ class DistanceDurationCsvDbWriterApp(SparkApp):
         for kh_key in kh_key_data_list:
             logger.debug(f"Prepare and write the data of kh_key '{kh_key}' in db ... ({p_index}/{total})")
 
-            kh_key_data = kh_key_df.filter(col("kh_key") == kh_key).collect()[0]
+            kh_key_data = self._get_kh_key_data(kh_key, kh_key_df)
 
             data_list = kh_key_data_list[kh_key]
             data_list = [list(i.values()) for i in data_list]
@@ -189,6 +210,9 @@ class DistanceDurationCsvDbWriterApp(SparkApp):
 
             self._write_with_versioning(dist_dur_df, kh_key, gueltig_ab_date)
             p_index += 1
+
+    def _get_kh_key_data(self, kh_key, kh_key_df):
+        return kh_key_df.filter(col("kh_key") == kh_key).collect()[0]
 
     @staticmethod
     def _extract_kh_key_data_from_files(csv_file_list: List[str], proceed_kh_key_list: List[str]) -> Dict:
@@ -224,7 +248,7 @@ class DistanceDurationCsvDbWriterApp(SparkApp):
         return root_folder
 
     @staticmethod
-    def _extract_csv_files(root_folder: str) -> [List[str], List[str]]:
+    def _extract_csv_files(root_folder: str) -> List[str]:
 
         files = os.listdir(root_folder)
         data_files = [os.path.join(root_folder, f) for f in files if
@@ -272,4 +296,7 @@ class DistanceDurationCsvDbWriterApp(SparkApp):
 
 
 if __name__ == '__main__':
-    DistanceDurationCsvDbWriterApp().main(gueltig_ab_date="20220323")
+    DistanceDurationCsvDbWriterApp().main(
+        gueltig_ab_date="20220405",
+        kh_key_list=['260620157|01']
+    )

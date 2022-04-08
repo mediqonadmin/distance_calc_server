@@ -1,4 +1,4 @@
-from typing import Dict, List
+from typing import Dict, List, Union
 
 from loguru import logger
 from pyspark.sql import DataFrame
@@ -38,17 +38,24 @@ class KhPlzDistanceCoordinationCreatorApp(SparkApp):
         else:
             reset_data = False
 
-        kh_key_list = self._get_kh_key_list()
+        input_kh_key_list = kwargs.get("kh_key_list", None)
+        assert input_kh_key_list is not None, "A kh_key_list as list of khkey's must be set"
+        assert isinstance(input_kh_key_list, List) is not None, "The kh_key_list must be list of kh_key's or empty list"
+
+        kh_key_list = self._get_kh_key_list(input_kh_key_list)
         plz_list = self._get_plz_list()
 
+        self._process_distance_standort_data(kh_key_list, plz_list, reset_data)
+
+        logger.info(f"Creating Krankenhaus PLZ Coordinations files done.")
+
+    def _process_distance_standort_data(self, kh_key_list, plz_list, reset_data):
         dc_creator = DCCreator(read_data_chunk_size=self.read_data_chunk_size,
                                proceed_saving_folder=self.proceed_temp_path,
                                if_exists="delete")
         dc_creator.process_distance_standort_data(point_list_1=kh_key_list,
                                                   point_list_2=plz_list,
                                                   delete_old_files=reset_data)
-
-        logger.info(f"Creating Krankenhaus PLZ Coordinations files done.")
 
     @staticmethod
     def _get_plz_list() -> List[Dict]:
@@ -76,7 +83,7 @@ class KhPlzDistanceCoordinationCreatorApp(SparkApp):
         return df
 
     @staticmethod
-    def get_kh_key_dataframe() -> DataFrame:
+    def get_kh_key_dataframe(input_kh_key_list: List[str]) -> DataFrame:
 
         logger.debug(f"Retrieving the kh_key list from {QB_KH_GEO_SOURCE_TABLE.full_db_path}")
 
@@ -89,6 +96,9 @@ class KhPlzDistanceCoordinationCreatorApp(SparkApp):
                                           QbKhGeoSourceSchema.relevanz.NAME,
                                           QbKhGeoSourceSchema.gueltig_bis.NAME).orderBy(
             QbKhGeoSourceSchema.kh_key.COL.asc())
+
+        if len(input_kh_key_list) > 0:
+            kh_key_df = kh_key_df.filter(QbKhGeoSourceSchema.kh_key.COL.isin(input_kh_key_list))
 
         kh_key_df = kh_key_df.filter(QbKhGeoSourceSchema.longitude.COL.isNotNull() &
                                      QbKhGeoSourceSchema.latitude.COL.isNotNull() &
@@ -108,9 +118,9 @@ class KhPlzDistanceCoordinationCreatorApp(SparkApp):
         return kh_key_joined_df
 
     @staticmethod
-    def _get_kh_key_list() -> List[Dict]:
+    def _get_kh_key_list(input_kh_key_list: List[str]) -> List[Dict]:
 
-        kh_key_df = KhPlzDistanceCoordinationCreatorApp.get_kh_key_dataframe()
+        kh_key_df = KhPlzDistanceCoordinationCreatorApp.get_kh_key_dataframe(input_kh_key_list)
         results = kh_key_df.collect()
         kh_key_list = [DCCreator.create_coordination_item(key=r["kh_key"],
                                                           latitude=r["latitude"],
@@ -121,5 +131,6 @@ class KhPlzDistanceCoordinationCreatorApp(SparkApp):
 
 if __name__ == '__main__':
     KhPlzDistanceCoordinationCreatorApp().main(
-        reset=True
+        reset=True,
+        kh_key_list=['260620157|01']
     )

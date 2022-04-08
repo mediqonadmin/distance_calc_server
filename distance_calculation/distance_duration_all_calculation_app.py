@@ -25,7 +25,8 @@ class DistanceDurationCalculationAllApp:
         self.archive_root_path = in_archive_root_path
         self.osrm_server_base_url = in_osrm_server_base_url
 
-        self.process_coord_file_script_path = os.path.join(os.path.dirname(__file__), "distance_duration_file_calculation_app.py")
+        self.process_coord_file_script_path = os.path.join(os.path.dirname(__file__),
+                                                           "distance_duration_file_calculation_app.py")
 
     def start(self):
         logger.info(f"Calculating Distance and Duration for coordination files in '{self.coordination_root_path}'")
@@ -50,15 +51,8 @@ class DistanceDurationCalculationAllApp:
                     coord_item = self.not_proceed_coordination_files_list[0]
                     self.not_proceed_coordination_files_list.remove(coord_item)
 
-                    running_arguments = ["python3",
-                                         self.process_coord_file_script_path,
-                                         f"coord_file={coord_item['source']}",
-                                         f"archive_file={coord_item['archive']}",
-                                         f"result_file={coord_item['result']}",
-                                         f"osrm_url={self.osrm_server_base_url}"]
-
+                    coord_item["proc"] = self._start_file_process(coord_item)
                     coord_item["status"] = "running"
-                    coord_item["proc"] = subprocess.Popen(running_arguments)
 
                     self.running_process.append(coord_item)
                     logger.info(f"Start processing {coord_item['source']}")
@@ -84,6 +78,17 @@ class DistanceDurationCalculationAllApp:
         logger.info(f"Failed items:")
         for i in failed_items:
             logger.info(f"   - {i['source']}  -->  {i['result']}")
+
+    def _start_file_process(self, coord_item):
+
+        running_arguments = ["python3",
+                             self.process_coord_file_script_path,
+                             f"coord_file={coord_item['source']}",
+                             f"archive_file={coord_item['archive']}",
+                             f"result_file={coord_item['result']}",
+                             f"osrm_url={self.osrm_server_base_url}"]
+        process = subprocess.Popen(running_arguments)
+        return process
 
     def _extract_coordination_files_list(self) -> List[Dict]:
         files_list = [f for f in os.listdir(self.coordination_root_path) if f.lower().endswith(".csv") and
